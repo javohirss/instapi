@@ -19,7 +19,6 @@ files2 = {
 # Для получения токена и id
 # response = requests.post('https://api.instagram.com/oauth/access_token/', data=files2)
 # print(response.json())
-#истекает через 60 дней начиная с 26.01.2022
 account1_token = "YOUR TOKEN"
 accoint1_id = 'YOUR ID'
 account2_token = "YOUR TOKEN"
