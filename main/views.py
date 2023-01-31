@@ -1,6 +1,6 @@
 from django.http import HttpResponse, JsonResponse
 import requests, json
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
 from .models import *
 from .forms import *
 from rest_framework import generics
@@ -8,13 +8,17 @@ from django.views import generic
 import requests, json
 # Create your views here.
 
-files2 = {
-        'client_id': 'CLIENT_ID',
-        'client_secret': 'CLIENT_SECRET',
+params = {
+        'api_version' : 'v15.0',
+        'client_id': '1122889231709880',
+        'client_secret': '48e193436a1a2562f86ba0b36d517e77',
         'grant_type': 'authorization_code',
-        'redirect_uri': 'REDIRECT_URI',
+        'redirect_uri': 'https://127.0.0.1:8000/code/',
         'code': 'YOUR GENERATED CODE',
+        'scope' : "user_profile,user_media,instagram_graph_user_profile,instagram_graph_user_media"
 }
+
+
 
 # Для получения токена и id
 # response = requests.post('https://api.instagram.com/oauth/access_token/', data=files2)
@@ -30,6 +34,44 @@ getting_media_data = requests.get('https://graph.instagram.com/YOUR_ID/media?fie
 # Here I am taking the data manually and passing it to the form also manually due to an issue with getting tokens automatically
 
 
+def exchange_token_to_long(token):
+    return requests.get(f"https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret={params['client_secret']}&access_token={token}").json()['access_token']
+
+def get_user_data(id, token):
+    return requests.get(f"https://graph.instagram.com/{params['api_version']}/{id}?fields=id,account_type,media_count,username&access_token={token}").json()
+
+def get_media_data(id, token):
+    return requests.get(f'https://graph.instagram.com/{id}/media?fields=id,caption,media_url,media_type,username,timestamp&access_token={token}').json()
+
+def send_auth(request):
+    auth_url = f"https://api.instagram.com/oauth/authorize?client_id={params['client_id']}&redirect_uri={params['redirect_uri']}&scope={params['scope']},&response_type=code"
+    return render(request, 'main/main.html', context={'auth_url':auth_url})
+
+
+def success(request):
+    return render(request,'main/success.html')
+
+def get_code(request):
+    code = request.GET.get('code')
+    files2 = {
+        'client_id': '1122889231709880',
+        'client_secret': '48e193436a1a2562f86ba0b36d517e77',
+        'grant_type': 'authorization_code',
+        'redirect_uri': 'https://127.0.0.1:8000/code/',
+        'code': code,
+    }
+    resp = requests.post('https://api.instagram.com/oauth/access_token/', data=files2).json()
+    token, id = resp['access_token'], resp['user_id']
+    token = exchange_token_to_long(token)
+    user_data = get_user_data(id, token)|{'access_token':token}
+    media_data = get_media_data(id, token)
+    print(user_data)
+    print(media_data)
+    Users.objects.create(**user_data)
+    for post in media_data['data']:
+        username = Users.objects.get(username=post.pop('username'))
+        Media.objects.create(username=username,**post)
+    return redirect(reverse('success_page'))
 
 class ShowPost(generic.DetailView):
     model = Users
@@ -65,6 +107,7 @@ class UsersView(generic.CreateView):
         context = super().get_context_data(**kwargs)
         context['title'] = 'Adding users'
         return context
+
 
 
 class MediaView(generic.CreateView):
